@@ -60,5 +60,7 @@ sudo docker compose -f deploy/compose.yaml restart web
 For every Compose command, keep SOURCE_REV set to the deployed commit, or save
 SOURCE_REV and WEB_PORT in deploy/.env and use --env-file deploy/.env.
 
-The build pins pnpm to the package.json version and limits Vite's JavaScript heap
-to 1536 MB for a small server. Nginx is pinned by image digest.
+The build pins pnpm to the package.json version and both base images by digest.
+Vite uses the upstream 4096 MB JavaScript heap limit. For a small server, build
+on a larger machine or provide enough temporary swap during compilation.
+The running Nginx container needs far less memory than the build process.
