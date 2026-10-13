@@ -1,66 +1,68 @@
-# Deployment demo
+# Linux deployment
 
-This deployment builds IT-Tools from this fork, runs it in Nginx, and exposes port 8080.
-GitHub stores the source. SSH transfers and manages the deployment.
-No GitHub token or SSH private key is stored on the server.
+This fork contains the source and deployment configuration for an IT-Tools demo.
+The default deployment uses the project's official release image, pinned by version
+and SHA-256 digest. It does not build a custom image from the fork.
 
-## Direct deployment when the server can reach GitHub
+## Deploy the official release
 
-Install Git, Docker Engine, and the Docker Compose plugin first.
+Requirements: Git, Docker Engine, Docker Compose, and an available host port.
 
 ```sh
 git clone https://github.com/ziran258/it-tools.git repo
 cd repo
-git rev-parse HEAD
-export SOURCE_REV="$(git rev-parse HEAD)"
-export WEB_PORT=8080
-sudo --preserve-env=SOURCE_REV,WEB_PORT docker compose -f deploy/compose.yaml config --quiet
-sudo --preserve-env=SOURCE_REV,WEB_PORT docker compose -f deploy/compose.yaml up -d --build
+sudo docker compose -f deploy/compose.release.yaml config --quiet
+sudo docker compose -f deploy/compose.release.yaml up -d
 curl --fail http://127.0.0.1:8080/
 ```
 
-## Deployment when the server cannot reach GitHub
+Application version: 2024.10.22-7ca5933.
+Official release: https://github.com/CorentinTh/it-tools/releases/tag/v2024.10.22-7ca5933
 
-On a computer that can reach GitHub, create a complete Git bundle from the fork:
+When the server cannot reach GitHub, create a complete Git bundle on another
+computer, transfer it over SSH, and clone it on the server:
 
 ```sh
 git clone https://github.com/ziran258/it-tools.git repo
 git -C repo bundle create ../it-tools.bundle --all
-```
-
-Transfer the bundle over SSH to an independent deployment directory.
-On the server, clone the bundle and restore the GitHub origin:
-
-```sh
+# Transfer it-tools.bundle to the server using scp, then on the server:
 git clone it-tools.bundle repo
 git -C repo remote set-url origin https://github.com/ziran258/it-tools.git
 cd repo
-export SOURCE_REV="$(git rev-parse HEAD)"
-export WEB_PORT=8080
-sudo --preserve-env=SOURCE_REV,WEB_PORT docker compose -f deploy/compose.yaml up -d --build
+sudo docker compose -f deploy/compose.release.yaml up -d
 ```
 
-This preserves the fork's commit history. Future updates can use a new bundle transferred
-over SSH, or normal git fetch when GitHub connectivity is restored.
-Code pushes to GitHub do not automatically update the deployed service.
+This preserves Git history and the original GitHub origin without placing a GitHub
+token or SSH private key on the server. Code changes pushed to GitHub do not
+automatically update the deployed service.
 
-## Network and validation
+## Validate and operate
 
-Allow TCP 8080 in the instance's cloud security group or Lighthouse firewall.
-Open http://SERVER_PUBLIC_IP:8080 from an external browser.
-Verify a tool works, refresh its direct URL, then restart only the demo container and
-verify it recovers. The Docker daemon should be enabled at boot.
+Allow TCP 8080 in the cloud instance's security group or Lighthouse firewall.
+Visit http://SERVER_PUBLIC_IP:8080 from an external browser, test a tool, and
+refresh its direct URL. To use another host port, set WEB_PORT.
 
 ```sh
-sudo docker compose -f deploy/compose.yaml ps
-sudo docker compose -f deploy/compose.yaml logs --tail=100
-sudo docker compose -f deploy/compose.yaml restart web
+sudo docker compose -f deploy/compose.release.yaml ps
+sudo docker compose -f deploy/compose.release.yaml logs --tail=100
+sudo docker compose -f deploy/compose.release.yaml restart web
+sudo docker compose -f deploy/compose.release.yaml stop web
 ```
 
-For every Compose command, keep SOURCE_REV set to the deployed commit, or save
-SOURCE_REV and WEB_PORT in deploy/.env and use --env-file deploy/.env.
+The service restarts automatically unless explicitly stopped. Enable the Docker
+daemon at boot.
 
-The build pins pnpm to the package.json version and both base images by digest.
-Vite uses the upstream 4096 MB JavaScript heap limit. For a small server, build
-on a larger machine or provide enough temporary swap during compilation.
-The running Nginx container needs far less memory than the build process.
+## Optional source build
+
+deploy/Dockerfile and deploy/compose.yaml can build a custom image from this fork.
+Both base images are pinned by digest and pnpm is pinned to 9.11.0.
+Run on a build machine with enough memory: the upstream Vite build allows a
+4096 MB JavaScript heap, and a 2 GB server may spend a long time swapping.
+
+```sh
+export SOURCE_REV="$(git rev-parse HEAD)"
+sudo --preserve-env=SOURCE_REV docker compose -f deploy/compose.yaml up -d --build
+```
+
+Use either compose.release.yaml or compose.yaml for the service, and keep using
+the selected file for all subsequent commands.
